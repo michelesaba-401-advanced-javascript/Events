@@ -1,51 +1,26 @@
 'use strict';
 
-const net = require('net');
-const uuid = require('uuid');
+const ioFactory = require('socket.io');
+const io = ioFactory(3000); // Listen for HTTP
 
-const PORT = process.env.PORT || 3001;
-const server = net.createServer();
+io.on('connection', socket => {
+  console.log('Connected', socket.id);
 
-server.listen(PORT, () => {
-  console.log(`Listening on port ${PORT}`);
+  socket.on('speak', payload => {
+    console.log('speaking', payload);
+
+    socket.broadcast.emit('spoken', payload);
+  });
+
+  setTimeout(() => {
+    socket.broadcast.emit('spoken', 'Welcome ' + socket.id);
+  }, 2000);
 });
 
-let socketPool = {};
-
-server.on('connection', socket => {
-  let id = uuid();
-  socket.id = id;
-  socketPool[id] = socket;
-
-  console.log(`Connection count: ${Object.keys(socketPool).length}`);
-
-  for (let socketId in socketPool) {
-    if (socketId === id) continue;
-
-    socketPool[socketId].write(`${id} connected!\r\n`);
-  }
-
-  socket.on('error', err => {
-    console.error(id, err);
-  });
-  socket.on('data', dataHandler);
-  socket.on('close', () => {
-    console.log(id, 'closing!');
-    delete socketPool[id];
-  });
-});
-
-// TODO: move this into a separate module
-// TODO: add tests that have nothing to do with the socket
-// NOTE: use call/bind/apply to specify 'this' in tests!
-function dataHandler(buffer) {
-  let id = this.id;
-  let text = buffer.toString().trim();
-  console.log(id, text);
-
-  for (let socketId in socketPool) {
-    if (socketId === id) continue;
-
-    socketPool[socketId].write(`${id}: ${text}\r\n`);
-  }
-}
+const dbio = io.of('/database');
+dbio.on('connection', socket =>
+  socket.on('save', payload => {
+    console.log('received save');
+    socket.emit('save', payload);
+  })
+);
